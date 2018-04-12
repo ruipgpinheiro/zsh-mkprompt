@@ -14,6 +14,7 @@ function mkputils_error {
 # (for strings where width matters, such as prompts)
 function mkputils_pad_unicode {
 	local chr="$1" width="${2:-1}"
+	[[ -z "$chr" ]] && return
 	echo "%{${chr}${(l:$width*2::%G:)}%}"
 }
 

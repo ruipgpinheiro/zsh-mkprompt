@@ -57,6 +57,7 @@ function mkprompt_vcs_info_async {
 	typeset -g _mkpmod_vcs_info_async_init=0
 	typeset -g _mkpmod_vcs_info_async_worker="vcs_info_async"
 	typeset -g _mkpmod_vcs_info_async_last_histcmd=""
+	typeset -g _mkpmod_vcs_info_async_pwd=""
 
 	# Styles
 	typeset -g _mkpmod_vcs_info_async_style="%{${reset_color}${style}%}"
@@ -69,6 +70,7 @@ function mkprompt_vcs_info_async {
 	# Uses pad-unicode to force symbols to have monospace width=1
 	typeset -g _mkpmod_vcs_info_async_sym_staged=$(  mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_STAGED-!}")
 	typeset -g _mkpmod_vcs_info_async_sym_unstaged=$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UNSTAGED-+}")
+	typeset -g _mkpmod_vcs_info_async_sym_initial=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_INITIAL-?}")
 	typeset -g _mkpmod_vcs_info_async_sym_unknown=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UNKNOWN-?}")
 	typeset -g _mkpmod_vcs_info_async_sym_working=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_WORKING-?}")
 	typeset -g _mkpmod_vcs_info_async_sym_up=$(      mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UP-}")
@@ -259,7 +261,7 @@ function mkprompt_vcs_info_async {
 					fi
 				fi
 
-				vcs_info_async_unknown=0
+				vcs_info_async_initial=0
 				_mkpmod_vcs_info_async_render 1
 				;;
 
@@ -307,15 +309,20 @@ function mkprompt_vcs_info_async {
 
 	# Called before every prompt is rendered the first time
 	function _mkpmod_vcs_info_async_main {
+		local real_pwd="`pwd -P`"
+
 
 		# If we are not in a known repo, we do a quick initial check
-		if [[ -z "$vcs_info_async[top]" || ! "`pwd -P`" = "$vcs_info_async[top]"* ]]; then
-			_mkpmod_vcs_info_async_initial_check
+		if [[ -z "$vcs_info_async[top]" || ! "$real_pwd" = "$vcs_info_async[top]"* ]]; then
+			# Only do the initial check if this is a new directory
+			[[ "$_mkpmod_vcs_info_async_pwd" != "$real_pwd" ]] && _mkpmod_vcs_info_async_initial_check
 
 		# Otherwise, we do a full update
 		else
 			_mkpmod_vcs_info_async_update
 		fi
+
+		_mkpmod_vcs_info_async_pwd="$real_pwd"
 	}
 
 	# Prepares the environment and then runs an initial check
@@ -335,20 +342,22 @@ function mkprompt_vcs_info_async {
 		# not work. As such, we kill the worker and restart it!
 
 		# stop async worker
-		((${_mkpmod_vcs_info_async_init:-0})) && {
+		if [[ ! -z "$vcs_info_async[top]" ]]; then
 			async_stop_worker "$_mkpmod_vcs_info_async_worker"
-			typeset -g _mkpmod_vcs_info_async_init=0
-		}
+			_mkpmod_vcs_info_async_init=0
+		else
+			async_flush_jobs "$_mkpmod_vcs_info_async_worker"
+		fi
 
 		# initialize async worker
-		((!${_mkpmod_vcs_info_async_init:-0})) && {
+		if [[ "$_mkpmod_vcs_info_async_init" -eq "0" ]]; then
 			async_start_worker "$_mkpmod_vcs_info_async_worker" -u
 			async_register_callback "$_mkpmod_vcs_info_async_worker" _mkpmod_vcs_info_async_callback
-			typeset -g _mkpmod_vcs_info_async_init=1
-		}
+			_mkpmod_vcs_info_async_init=1
+		fi
 
 		# Reset variables
-		typeset -g vcs_info_async_unknown=1
+		typeset -g vcs_info_async_initial=1
 		typeset -g vcs_info_async_error=0
 
 		typeset -gA vcs_info_async_wait=()
@@ -432,8 +441,8 @@ function mkprompt_vcs_info_async {
 		if [[ "$vcs_info_async_error" -ne "0" ]]; then
 			new_msg+="%{$reset_color$fg_bold[red]%}${_mkpmod_vcs_info_async_sym_error}%{$reset_color%}"
 
-		elif [[ "$vcs_info_async_unknown" -ne "0" ]]; then
-			new_msg="$_mkpmod_vcs_info_async_sym_unknown"
+		elif [[ "$vcs_info_async_initial" -ne "0" ]]; then
+			new_msg="$_mkpmod_vcs_info_async_sym_initial"
 
 		elif [[ ! -z "$branch" ]]; then
 			local dirty="$vcs_info_async[dirty]"
