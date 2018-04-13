@@ -37,11 +37,16 @@ function mkprompt_init {
 	typeset -g _mkprompt_arr=()
 
 	# Parameters
+	local use_default_config=0
 	while [[ "$#" -gt "0" ]]; do
 		case "$1" in
 		"-d"|"--delim"|"--delimiter")
 			_mkprompt_default_delim="$2"
 			shift 2
+			;;
+		"-def"|"--default")
+			use_default_config=1
+			shift 1
 			;;
 		*)
 			mkputils_error "[mkprompt] Invalid parameter '$1', ignored" "$0"
@@ -319,4 +324,9 @@ function mkprompt_init {
 	function _mkprompt_default {
 		. "$_mkprompt_root/mkprompt_default.zsh"
 	}
+
+	# Apply default config if requested
+	if [[ "$use_default_config" -eq "1" ]]; then
+		mkprompt_finish --default
+	fi
 }
