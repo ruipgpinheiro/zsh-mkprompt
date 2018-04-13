@@ -16,7 +16,7 @@ if mkputils_is_ssh ; then
 	mkprompt_hostname "$fg[yellow]"
 	mkprompt_set_delim ":"
 fi
-mkprompt_cwd "$fg[yellow]"
+mkprompt_cwd "$fg[yellow]" --format "prefix"
 mkprompt_prompt
 mkprompt_add_raw " "
 

@@ -75,7 +75,7 @@ function mkprompt_vcs_info_async {
 	typeset -g _mkpmod_vcs_info_async_sym_working=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_WORKING-?}")
 	typeset -g _mkpmod_vcs_info_async_sym_up=$(      mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UP-}")
 	typeset -g _mkpmod_vcs_info_async_sym_down=$(    mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_DOWN-}")
-	typeset -g _mkpmod_vcs_info_async_sym_ellipsis=$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ELLIPSIS-⋯}")
+	typeset -g _mkpmod_vcs_info_async_sym_ellipsis=$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ELLIPSIS-…}")
 	typeset -g _mkpmod_vcs_info_async_sym_error=$(   mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ERROR-✘}")
 
 	# Minimum interval in seconds between repeated checks for the same repo (0 disables)
