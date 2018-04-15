@@ -4,8 +4,7 @@
 #
 # mkprompt "vcs_info" module with asynchronous capability
 # Highly influenced by https://github.com/sindresorhus/pure
-# Shows the version control information of the current path in the prompt
-# NOTE: In order to avoid taking too long to show the prompt, only local file systems are shown
+# Shows the version control information of the current path in the prompt using zsh-async
 #
 # Parameters:
 # -s         : style
