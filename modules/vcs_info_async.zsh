@@ -155,7 +155,7 @@ function mkprompt_vcs_info_async {
 
 	# Git arrows job: Checks how many commits the current branch is ahead and/or behind upstream
 	# Outputs a string to stdout which can be used directly by the prompt
-	function _mkpmod_vcs_info_async_git_arrows {
+	function _mkpmod_vcs_info_async_job_git_arrows {
 		#echo $EPOCHSECONDS
 		builtin cd -q $1
 
@@ -208,7 +208,7 @@ function mkprompt_vcs_info_async {
 
 		case $job in
 			# Normal 'vcs_info' asynchronous request
-			"_mkpmod_vcs_info_async_job"*)
+			"_mkpmod_vcs_info_async_job_initial"|"_mkpmod_vcs_info_async_job_full")
 				# Handle errors
 				if [[ "$code" -ne "0" ]]; then
 					echo -n "\n" # Make sure to print in a separate line from the prompt
@@ -265,7 +265,7 @@ function mkprompt_vcs_info_async {
 				;;
 
 			# git arrows async request
-			"_mkpmod_vcs_info_async_git_arrows")
+			"_mkpmod_vcs_info_async_job_git_arrows")
 				# Success
 				if [[ "$code" -eq "0" ]]; then
 					vcs_info_async[arrows]="$output"
@@ -309,12 +309,13 @@ function mkprompt_vcs_info_async {
 	# Called before every prompt is rendered the first time
 	function _mkpmod_vcs_info_async_main {
 		local real_pwd="`pwd -P`"
-
+		local pwd_changed=0
+		[[ "$_mkpmod_vcs_info_async_pwd" != "$real_pwd" ]] && pwd_changed=1
 
 		# If we are not in a known repo, we do a quick initial check
 		if [[ -z "$vcs_info_async[top]" || ! "$real_pwd" = "$vcs_info_async[top]"* ]]; then
 			# Only do the initial check if this is a new directory
-			[[ "$_mkpmod_vcs_info_async_pwd" != "$real_pwd" ]] && _mkpmod_vcs_info_async_initial_check
+			[[ "$pwd_changed" -eq "1" ]] && _mkpmod_vcs_info_async_initial_check
 
 		# Otherwise, we do a full update
 		else
@@ -403,7 +404,7 @@ function mkprompt_vcs_info_async {
 
 			# If enough time has passed, do the check
 			( [[ "$refresh" -ne "0" ]] || mkputils_time_passed "$vcs_info_async_wait[arrows]" ) && \
-				async_job "$_mkpmod_vcs_info_async_worker" _mkpmod_vcs_info_async_git_arrows "$real_pwd"
+				async_job "$_mkpmod_vcs_info_async_worker" _mkpmod_vcs_info_async_job_git_arrows "$real_pwd"
 		else
 			# Not git
 			vcs_info_async[arrows]=""
