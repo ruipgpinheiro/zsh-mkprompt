@@ -96,12 +96,19 @@ function mkprompt_vcs_info_async {
 	#########
 	# Async job handlers
 
+	# disable any optional git locks, to avoid race conditions when actively using git at the same time as the prompt
+	function _mkpmod_disable_git_optional_locks {
+		export GIT_OPTIONAL_LOCKS=0
+	}
+
 	# Main job, responsible for calling and parsing vcs_info
 	# $1=1 -> Checks for dirty repos as well (slower)
 	function _mkpmod_vcs_info_async_job {
 		local dir="$1" check_for_changes="${2-0}"
 
 		builtin cd -qL "$dir" 2>/dev/null
+
+		_mkpmod_disable_git_optional_locks
 
 		# configure vcs_info inside async task, this frees up vcs_info
 		# to be used or configured as the user pleases without affecting the prompt
@@ -158,6 +165,8 @@ function mkprompt_vcs_info_async {
 	function _mkpmod_vcs_info_async_job_git_arrows {
 		#echo $EPOCHSECONDS
 		builtin cd -q $1
+
+		_mkpmod_disable_git_optional_locks
 
 		# Run git
 		local code=0 output=""
