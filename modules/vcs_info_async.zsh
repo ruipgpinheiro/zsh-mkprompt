@@ -53,32 +53,28 @@ function mkprompt_vcs_info_async {
 
 	#########
 	# Configuration
-	typeset -g _mkpmod_vcs_info_async_init=0
-	typeset -g _mkpmod_vcs_info_async_worker="vcs_info_async"
-	typeset -g _mkpmod_vcs_info_async_last_histcmd=""
-	typeset -g _mkpmod_vcs_info_async_pwd=""
 
 	# Styles
 	typeset -g _mkpmod_vcs_info_async_style="%{${reset_color}${style}%}"
-	[[ "$has_dirty_style" -eq "0" ]] && dirty_style="$style" 
+	[[ "$has_dirty_style" -eq "0" ]] && dirty_style="$style"
 	typeset -g _mkpmod_vcs_info_async_dirty_style="%{${reset_color}${dirty_style}%}"
-	[[ "$has_action_style" -eq "0" ]] && action_style="$style" 
+	[[ "$has_action_style" -eq "0" ]] && action_style="$style"
 	typeset -g _mkpmod_vcs_info_async_action_style="%{${reset_color}${action_style}%}"
 
 	# Symbols
 	# Uses pad-unicode to force symbols to have monospace width=1
-	typeset -g _mkpmod_vcs_info_async_sym_staged=$(  mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_STAGED-!}")
-	typeset -g _mkpmod_vcs_info_async_sym_unstaged=$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UNSTAGED-+}")
-	typeset -g _mkpmod_vcs_info_async_sym_initial=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_INITIAL-?}")
-	typeset -g _mkpmod_vcs_info_async_sym_unknown=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UNKNOWN-?}")
-	typeset -g _mkpmod_vcs_info_async_sym_working=$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_WORKING-?}")
-	typeset -g _mkpmod_vcs_info_async_sym_up=$(      mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UP-}")
-	typeset -g _mkpmod_vcs_info_async_sym_down=$(    mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_DOWN-}")
-	typeset -g _mkpmod_vcs_info_async_sym_ellipsis=$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ELLIPSIS-…}")
-	typeset -g _mkpmod_vcs_info_async_sym_error=$(   mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ERROR-✘}")
+	typeset -g _mkpmod_vcs_info_async_sym_staged="$(  mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_STAGED-!}")"
+	typeset -g _mkpmod_vcs_info_async_sym_unstaged="$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UNSTAGED-+}")"
+	typeset -g _mkpmod_vcs_info_async_sym_initial="$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_INITIAL-?}")"
+	typeset -g _mkpmod_vcs_info_async_sym_unknown="$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UNKNOWN-?}")"
+	typeset -g _mkpmod_vcs_info_async_sym_working="$( mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_WORKING-?}")"
+	typeset -g _mkpmod_vcs_info_async_sym_up="$(      mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_UP-}")"
+	typeset -g _mkpmod_vcs_info_async_sym_down="$(    mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_DOWN-}")"
+	typeset -g _mkpmod_vcs_info_async_sym_ellipsis="$(mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ELLIPSIS-…}")"
+	typeset -g _mkpmod_vcs_info_async_sym_error="$(   mkputils_pad_unicode "${MKPROMPT_VCS_INFO_SYM_ERROR-✘}")"
 
 	# Minimum interval in seconds between repeated checks for the same repo (0 disables)
-	# NOTE: 'git' commands always trigger a check
+	# NOTE: 'git'/'svn'/etc commands always trigger a check
 	# default: 5 seconds
 	typeset -g _mkpmod_vcs_info_async_minimum_interval="${MKPROMPT_VCS_INFO_MINIMUM_INTERVAL:-5}"
 
@@ -92,6 +88,47 @@ function mkprompt_vcs_info_async {
 	# default: 10
 	typeset -g _mkpmod_vcs_info_async_interval_exec_time_factor="${MKPROMPT_VCS_INFO_INTERVAL_EXEC_TIME_FACTOR:-10}"
 
+	#########
+	# First-time setup
+	function _mkpmod_vcs_info_async_full_reset {
+		typeset -g _mkpmod_vcs_info_async_is_init=0
+		typeset -g _mkpmod_vcs_info_async_worker="vcs_info_async"
+		typeset -g _mkpmod_vcs_info_async_last_histcmd=""
+		typeset -g _mkpmod_vcs_info_async_pwd=""
+
+		_mkpmod_vcs_info_async_reset
+	}
+
+	# Reset internal state of the vcs_info_async module
+	function _mkpmod_vcs_info_async_reset {
+		# Stop async worker
+		# Workaround: async_flush_jobs has a race condition
+		# If a job is already running (and only unique jobs are allowed),
+		# then flushing and immediately restarting the job might not work.
+		# As such, we kill the worker and restart it!
+		if [[ "$_mkpmod_vcs_info_sync_is_init" -ne "0" ]]; then
+			async_stop_worker "$_mkpmod_vcs_info_async_worker"
+			_mkpmod_vcs_info_async_is_init=0
+
+			# Legacy code (pre-workaround)
+			#async_flush_jobs "$_mkpmod_vcs_info_async_worker"
+		fi
+
+
+		# Initialize async worker
+		if [[ "$_mkpmod_vcs_info_async_is_init" -eq "0" ]]; then
+			async_start_worker "$_mkpmod_vcs_info_async_worker" -u
+			async_register_callback "$_mkpmod_vcs_info_async_worker" _mkpmod_vcs_info_async_callback
+			_mkpmod_vcs_info_async_is_init=1
+		fi
+
+		# Reset variables
+		typeset -g vcs_info_async_initial=1
+		typeset -g vcs_info_async_error=0
+
+		typeset -gA vcs_info_async_wait=()
+		typeset -gA vcs_info_async=()
+	}
 
 	#########
 	# Async job handlers
@@ -149,7 +186,7 @@ function mkprompt_vcs_info_async {
 			info[dirty]="$_mkpmod_vcs_info_async_sym_unknown"
 		fi
 
-		print -r - ${(@kvqqqq)info/.../${_mkpmod_vcs_info_async_sym_ellipsis}}
+		print -r - "${(@kvqqqq)info/.../${_mkpmod_vcs_info_async_sym_ellipsis}}"
 
 		return 0
 	}
@@ -164,13 +201,13 @@ function mkprompt_vcs_info_async {
 	# Outputs a string to stdout which can be used directly by the prompt
 	function _mkpmod_vcs_info_async_job_git_arrows {
 		#echo $EPOCHSECONDS
-		builtin cd -q $1
+		builtin cd -q "$1"
 
 		_mkpmod_disable_git_optional_locks
 
 		# Run git
 		local code=0 output=""
-		output=$( command git rev-list --left-right --count HEAD...@'{u}' 2>&1 )
+		output="$( command git rev-list --left-right --count HEAD...@'{u}' 2>&1 )"
 		code=$?
 
 		# If successful, we should parse the results
@@ -211,25 +248,49 @@ function mkprompt_vcs_info_async {
 
 	###############
 	# Async callback - called once an async worker finishes
-	function _mkpmod_vcs_info_async_callback {
-		local job="$1" code="$2" output="$3" exec_time="$4"
-		#echo_debug "job finished: $job" "vcs_info_async:callback"
+	function _mkpmod_vcs_info_async_callback_error {
+		local critical="$1" err="$2" job="$3" code="$4" stdout="$5" exec_time="$6" stderr="$7"
 
-		case $job in
+		echo -n "\n" # Make sure to print in a separate line from the prompt
+
+		mkputils_error "vcs_info_async callback error: $err\nJob '$job' returned $code."
+
+		if [[ ! -z "$stdout" ]]; then
+			mkputils_error_raw "==== Stdout:\n$stdout"
+		else
+			mkputils_error_raw "==== Stdout: EMPTY"
+		fi
+
+		if [[ ! -z "$stderr" ]]; then
+			mkputils_error_raw "==== Stderr:\n$stderr"
+		else
+			mkputils_error_raw "==== Stderr: EMPTY"
+		fi
+
+		echo -n "\n"
+
+		# Signal critical error and redraw prompt
+		if [[ "$critical" -ne "0" ]]; then
+			vcs_info_async_error="$critical"
+			_mkpmod_vcs_info_async_render 1
+		fi
+
+		return 0
+	}
+
+	function _mkpmod_vcs_info_async_callback {
+		local job="$1" code="$2" stdout="$3" exec_time="$4" stderr="$5"
+		#echo -n "\n" && echo_debug "Job finished: $job" "vcs_info_async:callback"
+
+		case "$job" in
 			# Normal 'vcs_info' asynchronous request
 			"_mkpmod_vcs_info_async_job_initial"|"_mkpmod_vcs_info_async_job_full")
-				# Handle errors
-				if [[ "$code" -ne "0" ]]; then
-					echo -n "\n" # Make sure to print in a separate line from the prompt
-					mkputils_error "non-zero error code $code (output='$output')" "vcs_info_async:vcs_info"
-					vcs_info_async_error=1
-					return 1
-				fi
+				[[ "$code" -ne "0" ]] && _mkpmod_vcs_info_async_callback_error 1 "Non-zero error code" "$@" && return 1
 				vcs_info_async_error=0
 
-				# parse output (z) and unquote as array (Q@)
-				local output_arr=("${(z)output[@]}")
-				local -A info=("${(QQQQ@)output_arr}")
+				# parse stdout (z) and unquote as array (Q@)
+				local stdout_arr=("${(z)stdout[@]}")
+				local -A info=("${(QQQQ@)stdout_arr}")
 
 				# If we just changed repo, branch, or vcs make sure we reset the current state
 				local reset=0
@@ -277,7 +338,7 @@ function mkprompt_vcs_info_async {
 			"_mkpmod_vcs_info_async_job_git_arrows")
 				# Success
 				if [[ "$code" -eq "0" ]]; then
-					vcs_info_async[arrows]="$output"
+					vcs_info_async[arrows]="$stdout"
 
 				# No upstream
 				elif [[ "$code" -eq "128" ]]; then
@@ -285,28 +346,26 @@ function mkprompt_vcs_info_async {
 
 				# Other errors
 				else
-					echo -n "\n" # Make sure to print in a separate line from the prompt
-					mkputils_error "non-zero error code $code (output='$output')" "vcs_info_async:git_arrows"
+					_mkpmod_vcs_info_async_callback_error 0 "Non-zero error code (git arrows)" "$@"
 					_mkpmod_vcs_info_async[arrows]="?"
 				fi
 
 				_mkpmod_vcs_info_async_update_wait "arrows" "$exec_time"
 				_mkpmod_vcs_info_async_render 1
+
+				[[ "_mkpmod_vcs_info_async[arrows]" == "?" ]] && return 2
 				;;
 
-			# zsh-async sometimes calls the handler for job 'async', no idea why
-			# This breaks the prompt, for some reason
-			"async")
-				vcs_info_async_error=1
-				return 1
+			# zsh-async uses job 'async' when the buffer is corrupt
+			"[async]")
+				_mkpmod_vcs_info_async_callback_error 1 "Zsh-async failure" "$@"
+				return 3
 				;;
 
 			# Unknown
 			*)
-				echo -n "\n" # Make sure to print in a separate line from the prompt
-				mkputils_error "Invalid job '$job'." "vcs_info_async:callback"
-				vcs_info_async_error=1
-				return 1
+				_mkpmod_vcs_info_async_callback_error 1 "Invalid Job" "$@"
+				return 4
 		esac
 		return 0
 	}
@@ -344,35 +403,6 @@ function mkprompt_vcs_info_async {
 		async_job "$_mkpmod_vcs_info_async_worker" _mkpmod_vcs_info_async_job_initial "`pwd -P`"
 	}
 
-	# Resets the current state of the vcs_info_async module
-	function _mkpmod_vcs_info_async_reset {
-		# Workaround: async_flush_jobs has a race condition
-		# If a job is already running (and only unique jobs are allowed), then flushing and immediately restarting the job might
-		# not work. As such, we kill the worker and restart it!
-
-		# stop async worker
-		if [[ ! -z "$vcs_info_async[top]" ]]; then
-			async_stop_worker "$_mkpmod_vcs_info_async_worker"
-			_mkpmod_vcs_info_async_init=0
-		else
-			async_flush_jobs "$_mkpmod_vcs_info_async_worker"
-		fi
-
-		# initialize async worker
-		if [[ "$_mkpmod_vcs_info_async_init" -eq "0" ]]; then
-			async_start_worker "$_mkpmod_vcs_info_async_worker" -u
-			async_register_callback "$_mkpmod_vcs_info_async_worker" _mkpmod_vcs_info_async_callback
-			_mkpmod_vcs_info_async_init=1
-		fi
-
-		# Reset variables
-		typeset -g vcs_info_async_initial=1
-		typeset -g vcs_info_async_error=0
-
-		typeset -gA vcs_info_async_wait=()
-		typeset -gA vcs_info_async=()
-	}
-
 	# Called when inside a known repo
 	# (i.e. a folder for which the initial_check returned a valid branch)
 	# Responsible for enqueuing any new checks
@@ -383,7 +413,7 @@ function mkprompt_vcs_info_async {
 		# Detect if the last command was current VCS
 		if [[ ! -z "$vcs_info_async[vcs]" && "$_mkpmod_vcs_info_async_last_histcmd" -ne "$HISTCMD" ]]; then
 			integer histpos=$HISTCMD-1
-			local lastcmd=$history[$histpos]
+			local lastcmd="$history[$histpos]"
 			[[ "$lastcmd" == "$vcs_info_async[vcs]"* ]] && refresh=1
 			_mkpmod_vcs_info_async_last_histcmd="$HISTCMD"
 		fi
@@ -496,6 +526,10 @@ function mkprompt_vcs_info_async {
 	# Precmd handler
 	# Calls the main vcs_info method and then renders the prompt the first time
 	function _mkpmod_vcs_info_async {
+		# If we haven't done a full reset yet, or an error has been signalled, reset all internal state
+		[[ -z "$_mkpmod_vcs_info_async_is_init" || "$vcs_info_async_error" -ne "0" ]] && _mkpmod_vcs_info_async_full_reset
+
+		# Render prompt
 		_mkpmod_vcs_info_async_main
 		_mkpmod_vcs_info_async_render 0
 	}

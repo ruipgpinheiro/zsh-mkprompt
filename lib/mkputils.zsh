@@ -4,10 +4,14 @@
 # zsh-mkprompt utility functions
 
 # Echos an error
+function mkputils_error_raw {
+	echo "$fg_bold[red]$@${reset_color}"
+}
+
 function mkputils_error {
 	local text="$1"
 	local title="${2-mkprompt}"
-	echo "$fg_bold[red][$title] ERROR: ${text}${reset_color}"
+	mkputils_error_raw "[$title] ERROR: ${text}"
 }
 
 # Workaround unicode character width being counted incorrectly by zsh
